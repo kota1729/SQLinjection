@@ -1320,11 +1320,150 @@
                 };
             }
 
-            const FAMILIES = [genA_orBypass, genB_commentBypass, genC_numeric, genD_doubleQuote, genE_orderBy, genF_union, genG_blind, genH_filter, genI_unionComment, genJ_timeBased];
+            function genK_stacked(rng) {
+                const t = pick(rng, PRODUCT_POOL);
+                const priceCol = pick(rng, ['price', 'stock', 'discount']);
+                const newVal = randInt(rng, 0, 1);
+                const flag = `FLAG{stacked_query_${randHex(rng, 4)}}`;
+                return {
+                    title: 'スタックドクエリ', tag: 'advanced',
+                    story: [
+                        `${t.jp}検索は複数のSQL文をセミコロンで区切って一度に実行できるDB設定になっています(一部のドライバ/DBで見られる設定です)。`,
+                        `1つのクエリの結果を返すだけでなく、続けて別の文を実行して ${priceCol} を書き換えてください。`
+                    ],
+                    queryTpl: (payload) => `SELECT * FROM ${t.table} WHERE id = ${esc(payload)};`,
+                    fields: [{ key: 'payload', label: 'ID パラメータ' }],
+                    check(vals) {
+                        const p = vals.payload || '';
+                        const re = new RegExp(`;\\s*update\\s+${t.table}\\s+set\\s+${priceCol}\\s*=\\s*${newVal}`, 'i');
+                        if (!re.test(p)) return { ok: false, msg: '追加の文が実行された形跡がありません。セミコロンで文を区切り、UPDATE文を続けてみましょう。' };
+                        const hasTerminator = /--|#/.test(p);
+                        if (!hasTerminator) return { ok: false, msg: '2つ目の文の後ろにも元の文の残りが続いてしまい、構文エラーになりました。コメントで打ち切りましょう。' };
+                        return { ok: true, msg: `UPDATE文が実行され、${t.table}.${priceCol} が ${newVal} に書き換わりました。`, flag };
+                    },
+                    hint: `例: 1; UPDATE ${t.table} SET ${priceCol}=${newVal} -- のように、セミコロンで文を区切って新しい文を続けます。`,
+                    explain: `一部のDB接続方式は、1回の呼び出しで複数のSQL文をセミコロン区切りでまとめて実行できます。これを悪用し、元のSELECTとは別に任意のUPDATE/DELETE/INSERTなどを注入する手法をスタックドクエリと呼びます。`
+                };
+            }
+
+            function genL_secondOrder(rng) {
+                const t = pick(rng, TABLE_POOL);
+                const flag = `FLAG{second_order_${randHex(rng, 4)}}`;
+                return {
+                    title: 'セカンドオーダーインジェクション', tag: 'advanced',
+                    story: [
+                        `${t.jp}の「表示名」欄への入力自体は、そのまま安全に保存されます(この時点ではエスケープも正しく行われます)。`,
+                        '問題は後日: 管理者向けの利用ログ集計スクリプトが、この表示名を未対策のまま別のクエリに埋め込んで実行することです。',
+                        '表示名を今登録しておき、後から実行される集計クエリの方をバイパスしてください。'
+                    ],
+                    queryTpl: (name) => `-- 1) 登録時(安全)\nINSERT INTO ${t.table} (display_name) VALUES ('${esc(name)}');\n\n-- 2) 後日、管理者ログ集計スクリプトが実行するクエリ(対策なし)\nSELECT * FROM admin_logs WHERE actor = '${esc(name)}';`,
+                    fields: [{ key: 'name', label: '表示名(登録内容)' }],
+                    check(vals) {
+                        const clause = `actor = '${vals.name}'`;
+                        const hit = evaluateClause(clause, { actor: 'system' });
+                        if (hit) return { ok: true, msg: '後日実行された集計クエリの条件が常に真になり、本来見えないログまで対象になりました。', flag };
+                        return { ok: false, msg: '集計クエリの条件は成立しませんでした。' };
+                    },
+                    hint: '登録した時点ではエスケープされていても、後で別の(対策されていない)クエリに生の文字列として使われるなら、通常のOR/コメント技術がそのまま効きます。',
+                    explain: `入力を保存した時点では安全でも、後で別の処理が同じ値を未対策のクエリに使い回すと、そこで初めて攻撃が発火します。これをセカンドオーダーインジェクションと呼び、"入力元"だけを対策していても防げない典型例です。`
+                };
+            }
+
+            function genM_wafCaseBypass(rng) {
+                const t = pick(rng, DOC_POOL);
+                const target = pick(rng, SECRET_TABLE_POOL);
+                const cols = randInt(rng, 3, 5);
+                const flag = `FLAG{waf_case_bypass_${randHex(rng, 4)}}`;
+                return {
+                    title: '大文字小文字によるWAFバイパス', tag: 'advanced',
+                    story: [
+                        `手前段にWAF(Web Application Firewall)があり、大文字の "UNION SELECT" という文字列を検知すると通信をブロックします。`,
+                        `SQL自体は大文字・小文字を区別しないため、WAFの検知パターンだけをすり抜ける書き方を考えてください。`,
+                        `目標: ${target} テーブルの内容を UNION で抜き出してください(カラム数は${cols})。`
+                    ],
+                    queryTpl: (payload) => `SELECT ${Array.from({ length: cols }, (_, i) => 'col' + (i + 1)).join(',')} FROM ${t.table} WHERE id = 0 ${esc(payload)};`,
+                    fields: [{ key: 'payload', label: '追加のSQL' }],
+                    check(vals) {
+                        const p = vals.payload || '';
+                        if (/UNION SELECT/.test(p)) return { ok: false, msg: '🛑 WAFにブロックされました("UNION SELECT" という大文字の並びを検知)。大文字・小文字を混ぜて検知パターンを回避してみましょう。' };
+                        const m = /union\s+select\s+(.+?)\s+from\s+(\w+)/i.exec(p);
+                        if (!m) return { ok: false, msg: 'UNION SELECT の構文が見つかりません。' };
+                        const c = m[1].split(',').map(s => s.trim());
+                        if (c.length !== cols) return { ok: false, msg: `列数(${c.length})が元のクエリ(${cols}列)と一致しません。` };
+                        if (!new RegExp(target, 'i').test(m[2])) return { ok: false, msg: `${target} テーブルを指定してみてください。` };
+                        return { ok: true, msg: `WAFを回避しつつ ${target} の内容を抜き出しました。`, flag };
+                    },
+                    hint: '例: uNioN SeLeCt のように大文字・小文字を混在させます。SQLエンジン自体は大文字小文字を区別しないので、これでも正しく実行されます。',
+                    explain: `多くのWAFは正規表現などの完全一致・大文字一致パターンで危険な文字列を検知します。しかしSQL自体は大文字小文字を区別しないため、"UnIoN SeLeCt" のように表記を変えるだけで検知ルールをすり抜けつつ、DB側では正常に解釈されてしまいます。`
+                };
+            }
+
+            function genN_headerInjection(rng) {
+                const flag = `FLAG{header_injection_${randHex(rng, 4)}}`;
+                const secretRow = { agent: 'internal-admin-crawler/1.0', note: '社内限定ログ' };
+                return {
+                    title: 'HTTPヘッダー経由のインジェクション', tag: 'intermediate',
+                    story: [
+                        'このサイトはアクセスログを記録する際、フォームの入力欄ではなく "User-Agent" ヘッダーの値をそのままSQLに埋め込んでいます。',
+                        '画面上の入力フォームは存在しませんが、User-Agentの値は自由に偽装して送信できます。',
+                        '本来は見えないはずの社内限定ログを表示させてください。'
+                    ],
+                    queryTpl: (agent) => `SELECT * FROM access_logs WHERE agent = '${esc(agent)}';`,
+                    fields: [{ key: 'agent', label: 'User-Agent(偽装して送信する値)' }],
+                    check(vals) {
+                        const hit = evaluateClause(`agent = '${vals.agent}'`, secretRow);
+                        if (hit) return { ok: true, msg: '社内限定ログが表示されました。', flag };
+                        return { ok: false, msg: '該当するログはありませんでした。' };
+                    },
+                    hint: 'フォームの入力欄でなくても、サーバーが信用してそのままSQLに使っている値であれば、同じ手口(OR/コメント)が通用します。',
+                    explain: `SQLインジェクションはフォームの入力欄だけの問題ではありません。User-Agent、RefererなどのHTTPヘッダー、Cookie、URLパラメータなど、サーバーが受け取ってSQLに使う値はすべて攻撃対象になり得ます。`
+                };
+            }
+
+            function genO_likeWildcard(rng) {
+                const t = pick(rng, PRODUCT_POOL);
+                const hiddenName = 'internal-' + randHex(rng, 6);
+                const flag = `FLAG{like_wildcard_${randHex(rng, 4)}}`;
+                return {
+                    title: 'LIKE演算子のワイルドカード悪用', tag: 'beginner',
+                    story: [
+                        `${t.jp}の部分一致検索は <code>LIKE</code> 演算子を使っています。`,
+                        '本来は名前の一部を入力する機能ですが、ワイルドカード自体や引用符の扱いに注意してください。',
+                        '検索条件を知らなくても、非公開のアイテムを検索結果に含めてください。'
+                    ],
+                    queryTpl: (q) => `SELECT * FROM ${t.table} WHERE name LIKE '%${esc(q)}%';`,
+                    fields: [{ key: 'q', label: '部分一致検索' }],
+                    check(vals) {
+                        const q = vals.q || '';
+                        if (q.includes("' OR '1'='1") || q.includes("' OR 1=1")) {
+                            return { ok: true, msg: `非公開アイテム「${hiddenName}」が検索結果に含まれました。`, flag };
+                        }
+                        return { ok: false, msg: '検索結果: 該当するアイテムはありませんでした。' };
+                    },
+                    hint: "検索欄は %入力%% のように % で囲まれて埋め込まれます。引用符を閉じてOR条件を足す発想は今までと同じです。例: ' OR '1'='1",
+                    explain: `LIKE検索であっても、入力値が引用符でそのまま囲まれて埋め込まれている以上、通常のORベースのバイパスがそのまま通用します。ワイルドカード自体(%, _)を悪用して全件を一致させる手口も、同じ発想の延長です。`
+                };
+            }
+
+            genA_orBypass.tag = 'beginner'; genB_commentBypass.tag = 'beginner'; genC_numeric.tag = 'beginner'; genO_likeWildcard.tag = 'beginner';
+            genD_doubleQuote.tag = 'intermediate'; genE_orderBy.tag = 'intermediate'; genF_union.tag = 'intermediate'; genN_headerInjection.tag = 'intermediate';
+            genG_blind.tag = 'advanced'; genH_filter.tag = 'advanced'; genI_unionComment.tag = 'advanced'; genJ_timeBased.tag = 'advanced';
+            genK_stacked.tag = 'advanced'; genL_secondOrder.tag = 'advanced'; genM_wafCaseBypass.tag = 'advanced';
+
+            const FAMILIES = [
+                genA_orBypass, genB_commentBypass, genC_numeric, genD_doubleQuote, genE_orderBy,
+                genF_union, genG_blind, genH_filter, genI_unionComment, genJ_timeBased,
+                genK_stacked, genL_secondOrder, genM_wafCaseBypass, genN_headerInjection, genO_likeWildcard,
+            ];
+            const DAILY_COUNT = 10;
 
             function buildBatch(seedStr) {
                 const rng = seededRng(seedStr);
-                return FAMILIES.map((fn, i) => { const lv = fn(rng); lv.id = i + 1; return lv; });
+                const tagOrder = { beginner: 0, intermediate: 1, advanced: 2 };
+                const chosen = shuffled(rng, FAMILIES)
+                    .slice(0, DAILY_COUNT)
+                    .sort((a, b) => tagOrder[a.tag] - tagOrder[b.tag]);
+                return chosen.map((fn, i) => { const lv = fn(rng); lv.id = i + 1; lv._fn = fn; return lv; });
             }
             function seedForYMD(y, m, d) {
                 return `sqli-dojo-${y}-${m}-${d}`;
@@ -1577,9 +1716,10 @@
                 if (state.mode === 'free') {
                     document.getElementById('shuffleOneBtn').onclick = () => {
                         const idx = LEVELS.findIndex(l => l.id === state.current);
-                        const familyIdx = (LEVELS[idx].id - 1) % FAMILIES.length;
-                        const fresh = FAMILIES[familyIdx](seededRng('shuffle-' + Date.now() + '-' + Math.random()));
+                        const fn = LEVELS[idx]._fn || FAMILIES[0];
+                        const fresh = fn(seededRng('shuffle-' + Date.now() + '-' + Math.random()));
                         fresh.id = LEVELS[idx].id;
+                        fresh._fn = fn;
                         LEVELS[idx] = fresh;
                         state.cleared.delete(fresh.id);
                         render();
