@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>SQLインジェクション道場</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <style>
+        :root {
+            --bg: #14130f;
+            --surface: #1e1c16;
+            --surface-2: #262319;
+            --border: #3a362a;
+            --text: #ede8da;
+            --text-dim: #a8a190;
+            --accent: #e8a33d;
+            --accent-dim: #b67e2c;
+            --success: #7fb069;
+            --success-dim: #3f5236;
+            --error: #d9634b;
+            --error-dim: #4a2b25;
+            box-sizing: border-box;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-padding-top: env(safe-area-inset-top, 0px);
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'IBM Plex Sans JP', 'Hiragino Sans', sans-serif;
+            line-height: 1.7;
+        }
+
+        code,
+        .mono,
+        input,
+        textarea,
+        .query-box,
+        .badge,
+        .level-num {
+            font-family: 'IBM Plex Mono', monospace;
+        }
+
+        a {
+            color: var(--accent);
+        }
+
+        header {
+            position: sticky;
+            top: 0;
+            padding: 18px 24px calc(14px);
+            padding-top: calc(18px + env(safe-area-inset-top, 0px));
+            background: linear-gradient(180deg, var(--bg) 80%, rgba(20, 19, 15, 0));
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        header h1 {
+            font-size: 19px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: 0.02em;
+        }
+
+        header h1 span {
+            color: var(--accent);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        button.back-btn {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12.5px;
+        }
+
+        button.back-btn:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+        }
+
+        .landing {
+            max-width: 720px;
+            margin: 40px auto 80px;
+            padding: 0 24px;
+        }
+
+        .landing-intro {
+            color: var(--text-dim);
+            max-width: 60ch;
+            margin-bottom: 26px;
+        }
+
+        .landing-intro p {
+            margin: 0 0 8px;
+        }
+
+        ul.date-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .date-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            text-align: left;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 14px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14.5px;
+        }
+
+        .date-item:hover {
+            border-color: var(--accent);
+            background: var(--surface-2);
+        }
+
+        .date-item .sub {
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .date-item.today .sub {
+            color: var(--success);
+        }
+
+        .date-item.freeplay {
+            border-style: dashed;
+            border-color: var(--accent-dim);
+            background: var(--surface-2);
+            margin-bottom: 10px;
+        }
+
+        .date-item.freeplay .sub {
+            color: var(--accent);
+        }
+
+        .date-item .arrow {
+            color: var(--text-dim);
+            font-size: 16px;
+        }
+
+        .date-picker {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12.5px;
+            color: var(--text-dim);
+        }
+
+        .date-picker select {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 9px;
+            border-radius: 6px;
+            font-size: 12.5px;
+            font-family: 'IBM Plex Sans JP', sans-serif;
+            max-width: 220px;
+        }
+
+        .progress {
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .progress b {
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        button.shuffle-all {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--accent);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12.5px;
+        }
+
+        button.shuffle-all:hover {
+            border-color: var(--accent);
+        }
+
+        button.shuffle-one {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 9px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        button.shuffle-one:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .layout {
+            display: flex;
+            max-width: 1120px;
+            margin: 0 auto;
+            align-items: flex-start;
+        }
+
+        nav.levels {
+            flex: 0 0 240px;
+            padding: 20px 12px 40px 24px;
+            position: sticky;
+            top: 70px;
+        }
+
+        nav.levels ol {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .lvl-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            padding: 9px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13.5px;
+        }
+
+        .lvl-btn:hover {
+            background: var(--surface);
+            color: var(--text);
+        }
+
+        .lvl-btn.active {
+            background: var(--surface-2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .lvl-btn .level-num {
+            flex: 0 0 20px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .lvl-btn.cleared .level-num::after {
+            content: "✓";
+            color: var(--success);
+            margin-left: 3px;
+        }
+
+        .lvl-btn .lvl-title {
+            flex: 1;
+        }
+
+        .tag {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            white-space: nowrap;
+        }
+
+        .tag.beginner {
+            border-color: #3f5236;
+            color: var(--success);
+        }
+
+        .tag.intermediate {
+            border-color: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .tag.advanced {
+            border-color: #6b3a33;
+            color: var(--error);
+        }
+
+        main {
+            flex: 1;
+            min-width: 0;
+            padding: 24px 24px 80px;
+        }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 24px 26px;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+
+        .panel-head h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .scenario {
+            color: var(--text-dim);
+            margin: 14px 0 18px;
+            max-width: 62ch;
+        }
+
+        .scenario p {
+            margin: 0 0 10px;
+        }
+
+        .query-box {
+            background: #0f0e0b;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 13.5px;
+            color: #cfead0;
+            overflow-x: auto;
+            white-space: pre;
+            margin: 6px 0 20px;
+        }
+
+        .query-box .ph {
+            color: var(--accent);
+        }
+
+        fieldset {
+            border: none;
+            padding: 0;
+            margin: 0 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-width: 46ch;
+        }
+
+        label {
+            font-size: 13px;
+            color: var(--text-dim);
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type=text] {
+            width: 100%;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 9px 11px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        input[type=text]:focus {
+            outline: 2px solid var(--accent);
+            outline-offset: 1px;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        button.run {
+            background: var(--accent);
+            color: #1a1408;
+            border: none;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button.run:hover {
+            background: #f0b458;
+        }
+
+        button.ghost {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 9px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        button.ghost:hover {
+            color: var(--text);
+            border-color: var(--text-dim);
+        }
+
+        .hint-box,
+        .explain-box {
+            margin-top: 16px;
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 13.5px;
+            border: 1px solid var(--border);
+        }
+
+        .hint-box {
+            color: var(--text-dim);
+            background: var(--surface-2);
+        }
+
+        .explain-box {
+            background: var(--success-dim);
+            border-color: #4c6b41;
+            color: #dff0d8;
+        }
+
+        .explain-box h4 {
+            margin: 0 0 6px;
+            color: var(--success);
+            font-size: 13px;
+        }
+
+        .result {
+            margin-top: 18px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .result.ok {
+            background: var(--success-dim);
+            border-color: #4c6b41;
+        }
+
+        .result.fail {
+            background: var(--error-dim);
+            border-color: #6b3a33;
+        }
+
+        .result .flag {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 13px;
+            padding: 3px 9px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.25);
+            color: var(--accent);
+        }
+
+        .leak-table {
+            margin-top: 10px;
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+        }
+
+        .leak-table th,
+        .leak-table td {
+            border: 1px solid var(--border);
+            padding: 5px 8px;
+            text-align: left;
+        }
+
+        .leak-table th {
+            color: var(--text-dim);
+        }
+
+        @media (max-width: 720px) {
+            .layout {
+                flex-direction: column;
+            }
+
+            nav.levels {
+                position: static;
+                flex: none;
+                width: 100%;
+                padding: 14px 16px 4px;
+                overflow-x: auto;
+            }
+
+            nav.levels ol {
+                flex-direction: row;
+            }
+
+            .lvl-btn {
+                flex-direction: column;
+                align-items: flex-start;
+                min-width: 108px;
+            }
+
+            main {
+                padding: 16px 16px 60px;
+            }
+
+            .panel {
+                padding: 18px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+
+        /* ---------- 認証画面 ---------- */
+        .auth-screen {
+            max-width: 420px;
+            margin: 60px auto;
+            padding: 0 24px;
+        }
+
+        .auth-screen h2 {
+            margin: 0 0 6px;
+            font-size: 19px;
+        }
+
+        .auth-sub {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-bottom: 22px;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .auth-form input {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 11px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'IBM Plex Sans JP', sans-serif;
+        }
+
+        .pw-wrap {
+            position: relative;
+        }
+
+        .pw-wrap input {
+            width: 100%;
+            padding-right: 58px;
+        }
+
+        .pw-toggle {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            border-radius: 4px;
+            padding: 5px 9px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .pw-rules {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.9;
+            background: var(--surface-2);
+            padding: 10px 12px;
+            border-radius: 6px;
+        }
+
+        .pw-rule {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pw-rule .dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #4a463a;
+            color: #14130f;
+            font-size: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .pw-rule .dot::before {
+            content: "×";
+        }
+
+        .pw-rule.valid {
+            color: var(--success);
+        }
+
+        .pw-rule.valid .dot {
+            background: var(--success);
+        }
+
+        .pw-rule.valid .dot::before {
+            content: "✓";
+        }
+
+        .auth-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .auth-actions .run {
+            width: 100%;
+        }
+
+        .auth-link-row {
+            text-align: center;
+            margin-top: 14px;
+        }
+
+        .auth-link-row button {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 12.5px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .auth-link-row button:hover {
+            color: var(--accent);
+        }
+
+        .auth-error {
+            color: var(--error);
+            font-size: 13px;
+            margin-top: 4px;
+            min-height: 1em;
+        }
+
+        .streak-badge {
+            font-size: 13px;
+            color: var(--accent);
+        }
+
+        .user-bar {
+            font-size: 12.5px;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-bar button {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .user-bar button:hover {
+            color: var(--error);
+            border-color: var(--error);
+        }
+
+        .date-item .done-mark {
+            color: var(--success);
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .date-item .undone-mark {
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+
+        .freeplay-more {
+            margin-top: 18px;
+            padding: 18px;
+            border: 1px dashed var(--accent-dim);
+            border-radius: 8px;
+            text-align: center;
+            background: var(--surface-2);
+        }
+
+        .freeplay-more p {
+            margin: 0 0 12px;
+            color: var(--text-dim);
+            font-size: 13.5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>SQL<span>インジェクション</span>道場</h1>
+        <div class="header-right" id="appHeaderControls" style="display:none;">
+            <button class="back-btn" id="backBtn">← 日付一覧に戻る</button>
+            <div class="progress"><b id="clearedCount">0</b> / 10 突破</div>
+        </div>
+        <div class="header-right" id="userBarWrap" style="display:none;"></div>
+    </header>
+
+    <!-- ログイン画面 -->
+    <div class="auth-screen" id="loginScreen">
+        <h2>ログイン</h2>
+        <p class="auth-sub">ユーザーIDとパスワードでログインしてください。デイリー問題の実施記録・連続記録を保存できます。</p>
+        <div class="auth-form">
+            <input type="text" id="loginUserId" placeholder="ユーザーID" autocomplete="off">
+            <div class="pw-wrap">
+                <input type="password" id="loginPassword" placeholder="パスワード" autocomplete="off">
+                <button type="button" class="pw-toggle" data-target="loginPassword">表示</button>
+            </div>
+        </div>
+        <div class="auth-error" id="loginError"></div>
+        <div class="auth-actions">
+            <button class="run" id="loginBtn">ログイン</button>
+            <button class="ghost" id="guestBtn">ゲストとして始める(記録は保存されません)</button>
+        </div>
+        <div class="auth-link-row"><button id="toRegisterBtn">新規登録はこちら</button></div>
+    </div>
+
+    <!-- 新規登録画面 -->
+    <div class="auth-screen" id="registerScreen" style="display:none;">
+        <h2>新規アカウント登録</h2>
+        <p class="auth-sub">ユーザーIDとパスワードを設定してください。メールアドレスは不要です。</p>
+        <div class="auth-form">
+            <input type="text" id="registerUserId" placeholder="ユーザーID(半角英数字と_-、3〜20文字)" autocomplete="off">
+            <div class="pw-wrap">
+                <input type="password" id="registerPassword" placeholder="パスワード" autocomplete="off">
+                <button type="button" class="pw-toggle" data-target="registerPassword">表示</button>
+            </div>
+            <div class="pw-rules" id="pwRules">
+                <div class="pw-rule" id="ruleLength"><span class="dot"></span>8文字以上</div>
+                <div class="pw-rule" id="ruleNumber"><span class="dot"></span>半角数字を含む</div>
+                <div class="pw-rule" id="ruleAlpha"><span class="dot"></span>半角ローマ字を含む</div>
+                <div class="pw-rule" id="ruleCharset"><span class="dot"></span>使えるのは半角英数字のみ</div>
+            </div>
+        </div>
+        <div class="auth-error" id="registerError"></div>
+        <div class="auth-actions">
+            <button class="run" id="registerBtn">登録する</button>
+            <button class="ghost" id="toLoginBtn">ログイン画面に戻る</button>
+        </div>
+    </div>
+
+    <div class="landing" id="landing" style="display:none;">
+        <div class="landing-intro">
+            <p>毎日、日付をシード(種)にして自動生成される10問のSQLインジェクション演習です。同じ日付なら誰の環境でも同じ問題になります。</p>
+            <p>過去に配信された日付を選ぶと、その日の10問を後からでも解けます。</p>
+        </div>
+        <ul class="date-list" id="dateList"></ul>
+    </div>
+
+    <div class="layout" id="appLayout" style="display:none;">
+        <nav class="levels">
+            <ol id="levelList"></ol>
+        </nav>
+        <main>
+            <div class="panel" id="panel"></div>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+
+            /* ---------- ミニSQL評価エンジン ---------- */
+            function stripComments(s) {
+                let out = ''; let inS = false, inD = false;
+                for (let i = 0; i < s.length; i++) {
+                    const c = s[i];
+                    if (!inD && c === "'") { inS = !inS; out += c; continue; }
+                    if (!inS && c === '"') { inD = !inD; out += c; continue; }
+                    if (!inS && !inD) {
+                        if (c === '-' && s[i + 1] === '-') return out;
+                        if (c === '#') return out;
+                        if (c === '/' && s[i + 1] === '*') {
+                            const end = s.indexOf('*/', i + 2);
+                            if (end === -1) return out;
+                            i = end + 1; continue;
+                        }
+                    }
+                    out += c;
+                }
+                return out;
+            }
+            function tokenize(s) {
+                const tokens = []; let i = 0;
+                while (i < s.length) {
+                    const c = s[i];
+                    if (/\s/.test(c)) { i++; continue; }
+                    if (c === "'" || c === '"') {
+                        const q = c; let j = i + 1, val = '';
+                        while (j < s.length) {
+                            if (s[j] === q) { if (s[j + 1] === q) { val += q; j += 2; continue; } j++; break; }
+                            val += s[j]; j++;
+                        }
+                        tokens.push({ type: 'string', value: val }); i = j; continue;
+                    }
+                    if (/[0-9]/.test(c)) {
+                        let j = i, val = '';
+                        while (j < s.length && /[0-9.]/.test(s[j])) { val += s[j]; j++; }
+                        tokens.push({ type: 'number', value: parseFloat(val) }); i = j; continue;
+                    }
+                    if (/[A-Za-z_]/.test(c)) {
+                        let j = i, val = '';
+                        while (j < s.length && /[A-Za-z0-9_]/.test(s[j])) { val += s[j]; j++; }
+                        const up = val.toUpperCase();
+                        if (up === 'AND') tokens.push({ type: 'and' });
+                        else if (up === 'OR') tokens.push({ type: 'or' });
+                        else if (up === 'NOT') tokens.push({ type: 'not' });
+                        else if (up === 'LENGTH') tokens.push({ type: 'func', value: 'LENGTH' });
+                        else tokens.push({ type: 'ident', value: val });
+                        i = j; continue;
+                    }
+                    if (c === '(') { tokens.push({ type: 'lparen' }); i++; continue; }
+                    if (c === ')') { tokens.push({ type: 'rparen' }); i++; continue; }
+                    if (c === '|' && s[i + 1] === '|') { tokens.push({ type: 'or' }); i += 2; continue; }
+                    if (c === '!' && s[i + 1] === '=') { tokens.push({ type: 'op', value: '!=' }); i += 2; continue; }
+                    if (c === '<' && s[i + 1] === '>') { tokens.push({ type: 'op', value: '!=' }); i += 2; continue; }
+                    if (c === '<' && s[i + 1] === '=') { tokens.push({ type: 'op', value: '<=' }); i += 2; continue; }
+                    if (c === '>' && s[i + 1] === '=') { tokens.push({ type: 'op', value: '>=' }); i += 2; continue; }
+                    if (c === '=') { tokens.push({ type: 'op', value: '=' }); i++; continue; }
+                    if (c === '<') { tokens.push({ type: 'op', value: '<' }); i++; continue; }
+                    if (c === '>') { tokens.push({ type: 'op', value: '>' }); i++; continue; }
+                    i++;
+                }
+                return tokens;
+            }
+            function parseTokens(tokens) {
+                let pos = 0;
+                const peek = () => tokens[pos];
+                const next = () => tokens[pos++];
+                function pExpr() { return pOr(); }
+                function pOr() { let n = pAnd(); while (peek() && peek().type === 'or') { next(); n = { type: 'or', left: n, right: pAnd() }; } return n; }
+                function pAnd() { let n = pNot(); while (peek() && peek().type === 'and') { next(); n = { type: 'and', left: n, right: pNot() }; } return n; }
+                function pNot() { if (peek() && peek().type === 'not') { next(); return { type: 'not', node: pNot() }; } return pPrimary(); }
+                function pPrimary() {
+                    if (peek() && peek().type === 'lparen') { next(); const n = pExpr(); if (peek() && peek().type === 'rparen') next(); return n; }
+                    return pCmp();
+                }
+                function pOperand() {
+                    const t = peek();
+                    if (!t) return { type: 'lit', value: null };
+                    if (t.type === 'func') {
+                        next(); let arg = null;
+                        if (peek() && peek().type === 'lparen') { next(); arg = pOperand(); if (peek() && peek().type === 'rparen') next(); }
+                        return { type: 'func', name: t.value, arg };
+                    }
+                    if (t.type === 'string') { next(); return { type: 'lit', value: t.value }; }
+                    if (t.type === 'number') { next(); return { type: 'lit', value: t.value }; }
+                    if (t.type === 'ident') { next(); return { type: 'col', name: t.value }; }
+                    next(); return { type: 'lit', value: null };
+                }
+                function pCmp() {
+                    const left = pOperand();
+                    const t = peek();
+                    if (t && t.type === 'op') { next(); const right = pOperand(); return { type: 'cmp', op: t.value, left, right }; }
+                    return { type: 'truthy', node: left };
+                }
+                return pExpr();
+            }
+            function resolveOperand(node, row) {
+                if (!node) return null;
+                if (node.type === 'lit') return node.value;
+                if (node.type === 'col') {
+                    const key = Object.keys(row).find(k => k.toLowerCase() === node.name.toLowerCase());
+                    return key ? row[key] : null;
+                }
+                if (node.type === 'func') {
+                    const v = resolveOperand(node.arg, row);
+                    if (node.name === 'LENGTH') return v == null ? 0 : String(v).length;
+                }
+                return null;
+            }
+            function evalAst(ast, row) {
+                switch (ast.type) {
+                    case 'or': return evalAst(ast.left, row) || evalAst(ast.right, row);
+                    case 'and': return evalAst(ast.left, row) && evalAst(ast.right, row);
+                    case 'not': return !evalAst(ast.node, row);
+                    case 'cmp': {
+                        let a = resolveOperand(ast.left, row), b = resolveOperand(ast.right, row);
+                        if (typeof a === 'number' || typeof b === 'number') { a = Number(a); b = Number(b); }
+                        else { a = String(a); b = String(b); }
+                        switch (ast.op) {
+                            case '=': return a === b;
+                            case '!=': return a !== b;
+                            case '<': return a < b;
+                            case '>': return a > b;
+                            case '<=': return a <= b;
+                            case '>=': return a >= b;
+                        }
+                        return false;
+                    }
+                    case 'truthy': {
+                        const v = resolveOperand(ast.node, row);
+                        return typeof v === 'number' ? v !== 0 : !!v;
+                    }
+                }
+                return false;
+            }
+            function evaluateClause(rawClause, row) {
+                try {
+                    const cleaned = stripComments(rawClause);
+                    const tokens = tokenize(cleaned);
+                    if (tokens.length === 0) return false;
+                    return !!evalAst(parseTokens(tokens), row);
+                } catch (e) { return false; }
+            }
+            function firstMatch(clause, table) {
+                for (const row of table) { if (evaluateClause(clause, row)) return row; }
+                return null;
+            }
+            function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+            /* ---------- 乱数(シード付き) ---------- */
+            function seededRng(seedStr) {
+                let h = 1779033703 ^ seedStr.length;
+                for (let i = 0; i < seedStr.length; i++) {
+                    h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353);
+                    h = (h << 13) | (h >>> 19);
+                }
+                let a = (h >>> 0) || 1;
+                return function () {
+                    a += 0x6D2B79F5;
+                    let t = a;
+                    t = Math.imul(t ^ (t >>> 15), t | 1);
+                    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+                };
+            }
+            function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+            function randInt(rng, min, max) { return min + Math.floor(rng() * (max - min + 1)); }
+            function randHex(rng, len) {
+                const base = '0123456789abcdef'; let s = '';
+                for (let i = 0; i < len; i++) s += base[Math.floor(rng() * 16)];
+                return s;
+            }
+            function shuffled(rng, arr) {
+                const a = arr.slice();
+                for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; }
+                return a;
+            }
+            function randPass(rng) {
+                const syll = ['ka', 'ri', 'zu', 'mo', 'ta', 'ne', 'fu', 'sa', 'ryo', 'ke'];
+                let s = ''; for (let i = 0; i < 3; i++) s += pick(rng, syll);
+                return s.charAt(0).toUpperCase() + s.slice(1) + randInt(rng, 10, 99) + '!';
+            }
+
+            /* ---------- 問題生成(10系統) ---------- */
+            const TABLE_POOL = [
+                { table: 'users', jp: 'ユーザー' }, { table: 'members', jp: '会員' },
+                { table: 'accounts', jp: 'アカウント' }, { table: 'customers', jp: '顧客' },
+            ];
+            const PRODUCT_POOL = [
+                { table: 'products', jp: '商品' }, { table: 'items', jp: 'アイテム' },
+                { table: 'inventory', jp: '在庫' }, { table: 'listings', jp: '出品情報' },
+            ];
+            const DOC_POOL = [
+                { table: 'articles', jp: '記事' }, { table: 'posts', jp: '投稿' },
+                { table: 'documents', jp: '資料' }, { table: 'memos', jp: '社内メモ' },
+            ];
+            const SECRET_TABLE_POOL = ['admin_secrets', 'confidential', 'internal_vault', 'staff_notes'];
+            const USERNAME_COLS = ['username', 'login_id', 'account_name'];
+            const PASSWORD_COLS = ['password', 'passwd', 'secret_key'];
+            const GUARD_COLS = [{ col: 'active', trueVal: 1 }, { col: 'enabled', trueVal: 1 }, { col: 'is_locked', trueVal: 0 }];
+            const NORMAL_USERS = ['guest', 'staff01', 'tanaka', 'bob', 'yuki'];
+
+            function genA_orBypass(rng) {
+                const t = pick(rng, TABLE_POOL);
+                const uCol = pick(rng, USERNAME_COLS);
+                const others = shuffled(rng, NORMAL_USERS).slice(0, 2);
+                const rows = [
+                    { [uCol]: 'admin' },
+                    { [uCol]: others[0] },
+                    { [uCol]: others[1] },
+                ];
+                const flag = `FLAG{or_bypass_${randHex(rng, 4)}}`;
+                return {
+                    title: `認証バイパス`, tag: 'beginner',
+                    story: [
+                        `${t.jp}テーブル(<code>${t.table}</code>)の「ユーザー名検索」機能は、入力値をそのままクエリに埋め込んでいます。`,
+                        '本来は存在するユーザー名を入れないと何も表示されないはずですが、任意の入力で何らかのユーザーを表示させてください。'
+                    ],
+                    queryTpl: (u) => `SELECT * FROM ${t.table} WHERE ${uCol} = '${esc(u)}';`,
+                    fields: [{ key: 'u', label: 'ユーザー名' }],
+                    check(vals) {
+                        const row = firstMatch(`${uCol} = '${vals.u}'`, rows);
+                        if (row) return { ok: true, msg: `検索結果に表示されました: ${row[uCol]}`, flag };
+                        return { ok: false, msg: '検索結果: 該当するユーザーはいません。' };
+                    },
+                    hint: '文字列を早めに閉じて、常に真になる条件を OR で追加すると何が起きるでしょうか。',
+                    explain: `入力値がそのままクエリに連結されるため、<code>' OR '1'='1</code> のような文字列を入れると WHERE句全体が常に真になり、テーブルの先頭行が常にマッチするようになります。`
+                };
+            }
+
+            function genB_commentBypass(rng) {
+                const t = pick(rng, TABLE_POOL);
+                const uCol = pick(rng, USERNAME_COLS), pCol = pick(rng, PASSWORD_COLS);
+                const guard = pick(rng, GUARD_COLS);
+                const others = shuffled(rng, NORMAL_USERS).slice(0, 2);
+                const rows = [
+                    { [uCol]: 'admin', [pCol]: randPass(rng), [guard.col]: guard.trueVal === 1 ? 0 : 1 },
+                    { [uCol]: others[0], [pCol]: randPass(rng), [guard.col]: guard.trueVal },
+                    { [uCol]: others[1], [pCol]: randPass(rng), [guard.col]: guard.trueVal },
+                ];
+                const flag = `FLAG{comment_bypass_${randHex(rng, 4)}}`;
+                return {
+                    title: 'コメントによる無効化', tag: 'beginner',
+                    story: [
+                        `admin アカウントは現在 <code>${guard.col} = ${guard.trueVal === 1 ? 0 : 1}</code> の状態(無効・停止中)です。`,
+                        `クエリには <code>AND ${guard.col} = ${guard.trueVal}</code> の条件が追加されました。`,
+                        '目標: それでも admin としてログインしてください。'
+                    ],
+                    queryTpl: (u, p) => `SELECT * FROM ${t.table} WHERE ${uCol} = '${esc(u)}' AND ${pCol} = '${esc(p)}' AND ${guard.col} = ${guard.trueVal};`,
+                    fields: [{ key: 'u', label: 'ユーザー名' }, { key: 'p', label: 'パスワード' }],
+                    check(vals) {
+                        const row = firstMatch(`${uCol} = '${vals.u}' AND ${pCol} = '${vals.p}' AND ${guard.col} = ${guard.trueVal}`, rows);
+                        if (row && row[uCol] === 'admin') return { ok: true, msg: 'ログイン成功: admin としてサインインしました(本来は無効化されているはずのアカウントで)。', flag };
+                        if (row) return { ok: false, msg: `${row[uCol]} としてログインできましたが、admin ではありません。` };
+                        return { ok: false, msg: 'ログイン失敗: 条件が一致しません。' };
+                    },
+                    hint: '-- や # は、それより後ろのSQLをすべて無視させることができます。password と条件チェック自体を消してしまいましょう。',
+                    explain: `<code>admin' --</code> と入力すると、クエリは username = 'admin' だけが残り、password と追加条件のチェックが丸ごとコメントアウトされます。`
+                };
+            }
+
+            function genC_numeric(rng) {
+                const t = pick(rng, PRODUCT_POOL);
+                const hiddenId = randInt(rng, 100, 999);
+                const flag = `FLAG{numeric_injection_${randHex(rng, 4)}}`;
+                const rows = [
+                    { id: 1, name: '公開アイテムA' }, { id: 2, name: '公開アイテムB' }, { id: 3, name: '公開アイテムC' },
+                    { id: hiddenId, name: `非公開: 次世代${t.jp}試作`, secretFlag: flag },
+                ];
+                return {
+                    title: '数値型インジェクション', tag: 'beginner',
+                    story: [
+                        `${t.jp}検索フォーム(<code>${t.table}</code>)です。ID はクオートで囲まれずそのまま埋め込まれます。`,
+                        'ID を知らなくても、非公開の情報を検索結果に含めてください。'
+                    ],
+                    queryTpl: (id) => `SELECT * FROM ${t.table} WHERE id = ${esc(id)};`,
+                    fields: [{ key: 'id', label: '商品ID' }],
+                    check(vals) {
+                        const target = rows[3];
+                        const hit = evaluateClause(`id = ${vals.id}`, target);
+                        if (hit) return { ok: true, msg: `非公開情報が検索結果に表示されました: 「${target.name}」`, flag };
+                        return { ok: false, msg: '検索結果: 該当する情報はありませんでした。' };
+                    },
+                    hint: '数値項目はクオートで囲まれていません。文字列を閉じる必要はなく、そのまま OR 条件を続けられます。',
+                    explain: `<code>0 OR 1=1</code> のように入力すると WHERE句がすべての行で真になり、ID未指定では出てこない非公開データまで結果に含まれます。`
+                };
+            }
+
+            function genD_doubleQuote(rng) {
+                const t = pick(rng, DOC_POOL);
+                const flagCol = pick(rng, ['private', 'restricted', 'internal_only']);
+                const flag = `FLAG{double_quote_bypass_${randHex(rng, 4)}}`;
+                const rows = [
+                    { title: `公開${t.jp}: 今週のお知らせ`, [flagCol]: 0 },
+                    { title: `社内限定: 未発表情報について`, [flagCol]: 1, secretFlag: flag },
+                ];
+                return {
+                    title: 'ダブルクオート編', tag: 'intermediate',
+                    story: [
+                        `この${t.jp}検索フォーム(<code>${t.table}</code>)は文字列をダブルクオートで囲んでいます。`,
+                        '社内限定のタイトルを検索結果に表示させてください。'
+                    ],
+                    queryTpl: (q) => `SELECT * FROM ${t.table} WHERE title = "${esc(q)}";`,
+                    fields: [{ key: 'q', label: 'タイトル検索' }],
+                    check(vals) {
+                        const target = rows[1];
+                        const hit = evaluateClause(`title = "${vals.q}"`, target);
+                        if (hit) return { ok: true, msg: '非公開の情報が検索結果に含まれました。', flag };
+                        return { ok: false, msg: '該当する情報はありませんでした。' };
+                    },
+                    hint: 'シングルクオートで閉じようとしても失敗するはずです。今回は " を使いましょう。',
+                    explain: `<code>" OR "1"="1</code> のようにダブルクオートで文字列を閉じることで、常に真になる条件を追加できます。シングルクオート対策だけでは防げない典型例です。`
+                };
+            }
+
+            function genE_orderBy(rng) {
+                const t = pick(rng, DOC_POOL);
+                const cols = randInt(rng, 3, 8);
+                const flag = `FLAG{order_by_enum_${randHex(rng, 4)}}`;
+                return {
+                    title: 'ORDER BY でカラム数を調べる', tag: 'intermediate',
+                    story: [
+                        `${t.jp}一覧(<code>${t.table}</code>)の並び替え機能です。<code>ORDER BY</code> の後ろに指定した列番号がそのまま使われます。`,
+                        'このテーブルの実際のカラム数を突き止めてください(次のレベルで使うことがあります)。'
+                    ],
+                    queryTpl: (n) => `SELECT * FROM ${t.table} ORDER BY ${esc(n)};`,
+                    fields: [{ key: 'n', label: '並び替え列番号' }],
+                    check(vals) {
+                        const n = parseInt(String(vals.n).trim(), 10);
+                        if (isNaN(n)) return { ok: false, msg: '数値を入力してください。' };
+                        if (n > cols) return { ok: false, msg: `データベースエラー: ORDER BY の列位置 ${n} は範囲外です(Unknown column '${n}' in 'order clause')。` };
+                        if (n < cols) return { ok: false, msg: '並び替えは正常に実行されました。もっと大きい数字も試して、エラーになる境目を探してみましょう。' };
+                        return { ok: true, msg: `カラム数は ${cols} だと判明しました。`, flag };
+                    },
+                    hint: '1から順に増やしていき、エラーが出る一歩手前の数字が答えです(二分探索でも構いません)。',
+                    explain: `ORDER BY の指定番号が実際のカラム数を超えるとエラーになります。エラーが出ない最大の番号が、そのテーブルのカラム数です。`
+                };
+            }
+
+            function genF_union(rng) {
+                const t = pick(rng, DOC_POOL);
+                const target = pick(rng, TABLE_POOL);
+                const uCol = pick(rng, USERNAME_COLS), pCol = pick(rng, PASSWORD_COLS);
+                const cols = randInt(rng, 3, 7);
+                const flag = `FLAG{union_extraction_${randHex(rng, 4)}}`;
+                const users = shuffled(rng, NORMAL_USERS).slice(0, 3).map(u => ({ [uCol]: u, [pCol]: randPass(rng) }));
+                return {
+                    title: 'UNION SELECT でデータ抽出', tag: 'intermediate',
+                    story: [
+                        `この${t.jp}検索(<code>${t.table}</code>、カラム数 ${cols})は <code>id</code> パラメータを直接埋め込んでいます。`,
+                        `UNION SELECT を使って、別テーブル <code>${target.table}</code> の ${uCol} と ${pCol} を抜き出してください。`,
+                        'ヒント: 前段階として ORDER BY でカラム数を数えておく必要があります。'
+                    ],
+                    queryTpl: (payload) => `SELECT ${Array.from({ length: cols }, (_, i) => 'col' + (i + 1)).join(',')} FROM ${t.table} WHERE id = 0 ${esc(payload)};`,
+                    fields: [{ key: 'payload', label: '追加のSQL(UNION以降)' }],
+                    check(vals) {
+                        const p = vals.payload || '';
+                        const m = /union\s+select\s+(.+?)\s+from\s+(\w+)/i.exec(p);
+                        if (!m) return { ok: false, msg: 'UNION SELECT の構文が見つかりません。「UNION SELECT 列1,列2,... FROM テーブル名」の形にしてください。' };
+                        const c = m[1].split(',').map(s => s.trim());
+                        if (c.length !== cols) return { ok: false, msg: `データベースエラー: SELECT の列数(${c.length})が元のクエリの列数(${cols})と一致しません。` };
+                        if (!new RegExp(target.table, 'i').test(m[2])) return { ok: false, msg: `テーブル "${m[2]}" は想定と異なります。${target.table} テーブルを指定してみてください。` };
+                        if (!new RegExp(uCol, 'i').test(p) || !new RegExp(pCol, 'i').test(p)) return { ok: false, msg: `${uCol} と ${pCol} の列を選択してください。` };
+                        const rowsHtml = users.map(u => `<tr><td>${esc(u[uCol])}</td><td>${esc(u[pCol])}</td></tr>`).join('');
+                        return { ok: true, msg: `${target.table} テーブルの内容が漏洩しました:`, flag, extraHtml: `<table class="leak-table"><tr><th>${uCol}</th><th>${pCol}</th></tr>${rowsHtml}</table>` };
+                    },
+                    hint: `カラム数を${cols}個に揃え、狙った位置に ${uCol}, ${pCol} を、残りは適当な値で埋めましょう。`,
+                    explain: `UNION SELECT は2つのSELECT結果を縦に結合します。列数を元のクエリに合わせる必要があるため、事前にカラム数を調べておくことが重要です。`
+                };
+            }
+
+            function genG_blind(rng) {
+                const t = pick(rng, TABLE_POOL);
+                const pCol = pick(rng, PASSWORD_COLS);
+                const secretLen = randInt(rng, 6, 14);
+                const flag = `FLAG{blind_boolean_${randHex(rng, 4)}}`;
+                const adminRow = { username: 'admin', [pCol]: 'x'.repeat(secretLen) };
+                return {
+                    title: 'ブラインドSQLインジェクション', tag: 'advanced',
+                    story: [
+                        `${t.jp}テーブルへのログインフォームは結果を表示せず、「成立」「不成立」のどちらかだけを返します。`,
+                        `画面には何も表示されない状態で、admin の ${pCol} の文字数を当ててください。`,
+                        `(ヒント: <code>LENGTH(${pCol})</code> が使えます)`
+                    ],
+                    queryTpl: (cond) => `SELECT * FROM ${t.table} WHERE username = 'admin' AND ${esc(cond)};`,
+                    fields: [{ key: 'cond', label: '真偽を確認したい条件' }],
+                    check(vals) {
+                        const truthy = evaluateClause(`username = 'admin' AND ${vals.cond}`, adminRow);
+                        if (!truthy) return { ok: false, msg: '条件不成立 (false)' };
+                        const re = new RegExp(`length\\s*\\(\\s*${pCol}\\s*\\)\\s*=\\s*(\\d+)`, 'i');
+                        const m = re.exec(vals.cond);
+                        if (m && parseInt(m[1], 10) === secretLen) return { ok: true, msg: `条件成立 (true)。${pCol} の長さは ${secretLen} 文字だと判明しました。`, flag };
+                        return { ok: false, msg: '条件成立 (true) — 画面上の反応から真偽だけがわかります。数字を変えて絞り込んでいきましょう。' };
+                    },
+                    hint: `LENGTH(${pCol})=1, =2, =3 ... と数を変えて送るうち、trueになる数字が見つかります。二分探索が効率的です。`,
+                    explain: `表示内容が同じでも「成立/不成立」の1ビットの差だけを頼りに、真偽値を1問1問聞き出してデータを推測するのがブラインドSQLインジェクションです。`
+                };
+            }
+
+            function genH_filter(rng) {
+                const t = pick(rng, TABLE_POOL);
+                const uCol = pick(rng, USERNAME_COLS), pCol = pick(rng, PASSWORD_COLS);
+                const others = shuffled(rng, NORMAL_USERS).slice(0, 2);
+                const rows = [
+                    { [uCol]: 'admin', [pCol]: randPass(rng) },
+                    { [uCol]: others[0], [pCol]: randPass(rng) },
+                    { [uCol]: others[1], [pCol]: randPass(rng) },
+                ];
+                const flag = `FLAG{filter_bypass_${randHex(rng, 4)}}`;
+                return {
+                    title: 'フィルターバイパス', tag: 'advanced',
+                    story: [
+                        '開発者はセキュリティ対策として、入力から "or" という文字列(大文字小文字問わず)を単純に削除するようにしました。',
+                        'それでもログイン認証をバイパスしてください。'
+                    ],
+                    queryTpl: (u, p) => {
+                        const filtered = String(u).replace(/or/gi, '');
+                        return `-- フィルター適用後: '${esc(filtered)}'\nSELECT * FROM ${t.table} WHERE ${uCol} = '${esc(filtered)}' AND ${pCol} = '${esc(p)}';`;
+                    },
+                    fields: [{ key: 'u', label: 'ユーザー名' }, { key: 'p', label: 'パスワード' }],
+                    check(vals) {
+                        const filtered = String(vals.u).replace(/or/gi, '');
+                        const row = firstMatch(`${uCol} = '${filtered}' AND ${pCol} = '${vals.p}'`, rows);
+                        if (row) return { ok: true, msg: `フィルターを回避してログイン成功: ${row[uCol]}`, flag };
+                        return { ok: false, msg: `フィルター適用後の入力では一致しませんでした(適用後: "${filtered}")。` };
+                    },
+                    hint: 'このフィルターは一回きりの単純な置換です。削除された後に "or" が"再構成"されるような書き方はできないでしょうか。また、この後ろには password のチェックも続いているので、Lv.2で使ったコメントのテクニックも組み合わせる必要があります。',
+                    explain: `<code>replace(/or/gi,'')</code> は1回だけスキャンして "or" を取り除きます。<code>oOrR</code> の中央2文字が消えると前後がくっついて実質 "or" が復元されてしまいます。さらに、その後ろに残る password のチェックを無効化するため、コメント(<code>--</code>)も併用しています。`
+                };
+            }
+
+            function genI_unionComment(rng) {
+                const t = pick(rng, PRODUCT_POOL);
+                const secretTable = pick(rng, SECRET_TABLE_POOL);
+                const guardCol = pick(rng, ['status', 'visibility', 'state']);
+                const guardVal = pick(rng, ['active', 'published', 'live']);
+                const cols = randInt(rng, 3, 6);
+                const flag = `FLAG{union_plus_comment_${randHex(rng, 4)}}`;
+                return {
+                    title: 'UNION + コメントで機密情報を抜く', tag: 'advanced',
+                    story: [
+                        `${t.jp}検索(${cols}カラム)の末尾には <code>AND ${guardCol} = '${guardVal}'</code> が付いています。`,
+                        `別テーブル <code>${secretTable}</code> に社外秘のフラグが保管されています。`,
+                        'UNION SELECT でその内容を抜き出し、末尾の条件も無効化してください。'
+                    ],
+                    queryTpl: (payload) => `SELECT ${Array.from({ length: cols }, (_, i) => 'col' + (i + 1)).join(',')} FROM ${t.table} WHERE id = 0 ${esc(payload)} AND ${guardCol} = '${guardVal}';`,
+                    fields: [{ key: 'payload', label: '追加のSQL' }],
+                    check(vals) {
+                        const p = vals.payload || '';
+                        const m = /union\s+select\s+(.+?)\s+from\s+(\w+)/i.exec(p);
+                        if (!m) return { ok: false, msg: 'UNION SELECT の構文が見つかりません。' };
+                        const c = m[1].split(',').map(s => s.trim());
+                        if (c.length !== cols) return { ok: false, msg: `列数(${c.length})が元のクエリ(${cols}列)と一致しません。` };
+                        if (!new RegExp(secretTable, 'i').test(m[2])) return { ok: false, msg: `${secretTable} テーブルを指定してみてください。` };
+                        const hasComment = /--|#/.test(p.slice(p.toLowerCase().indexOf('from')));
+                        if (!hasComment) return { ok: false, msg: `データベースエラー: UNIONの行に ${guardCol} カラムが存在しないため、末尾の条件でエラーになりました。末尾ごと無効化する方法を考えてみましょう。` };
+                        return { ok: true, msg: `${secretTable} テーブルの内容が漏洩しました。`, flag };
+                    },
+                    hint: `UNION部分の列数を${cols}つに揃え、テーブル名を ${secretTable} に。最後に -- を置いて元のクエリの残りを無効化しましょう。`,
+                    explain: `UNIONで持ってきた行には ${guardCol} 列が存在しないため、末尾の条件が残っているとエラーになります。<code>--</code> でその部分ごとコメントアウトして初めて成功します。`
+                };
+            }
+
+            function genJ_timeBased(rng) {
+                const t = pick(rng, PRODUCT_POOL);
+                const threshold = randInt(rng, 3, 6);
+                const flag = `FLAG{time_based_blind_${randHex(rng, 4)}}`;
+                return {
+                    title: '時間ベース・ブラインド', tag: 'advanced',
+                    story: [
+                        `${t.jp}情報の取得エンドポイントは、真でも偽でも画面上の表示が全く同じです。`,
+                        '唯一の手がかりは応答時間です。',
+                        `SLEEP() を使って、応答を${threshold}秒以上意図的に遅延させ、注入が効いていることを確認してください。`
+                    ],
+                    queryTpl: (payload) => `SELECT * FROM ${t.table} WHERE id = ${esc(payload)};`,
+                    fields: [{ key: 'payload', label: 'ID パラメータ' }],
+                    check(vals) {
+                        const m = /sleep\s*\(\s*(\d+(?:\.\d+)?)\s*\)/i.exec(vals.payload || '');
+                        if (!m) return { ok: false, msg: '即座に応答が返りました(0ms)。SLEEP() を使った遅延を試してみましょう。' };
+                        const n = parseFloat(m[1]);
+                        if (n < threshold) return { ok: false, msg: `応答時間: 約${Math.round(n * 200)}ms — 短すぎて確信を持てません。もう少し長い秒数を指定してみましょう。`, delayMs: n * 200 };
+                        return { ok: true, msg: `応答時間: 約${Math.min(n, 5) * 1000}ms かかりました。意図的な遅延が発生 = SQLインジェクションが効いている証拠です。`, flag, delayMs: Math.min(n, 5) * 1000 };
+                    },
+                    hint: `例: 1 AND SLEEP(${threshold}) のように、真になる条件の後ろに SLEEP(秒数) を続けてみましょう。`,
+                    explain: `表示内容に差が出ない場合でも、SLEEP()による人為的な遅延を仕込み、応答時間を計測することで真偽を1ビットずつ読み取れます。これが時間ベース・ブラインドSQLインジェクションです。`
+                };
+            }
+
+            const FAMILIES = [genA_orBypass, genB_commentBypass, genC_numeric, genD_doubleQuote, genE_orderBy, genF_union, genG_blind, genH_filter, genI_unionComment, genJ_timeBased];
+
+            function buildBatch(seedStr) {
+                const rng = seededRng(seedStr);
+                return FAMILIES.map((fn, i) => { const lv = fn(rng); lv.id = i + 1; return lv; });
+            }
+            function seedForYMD(y, m, d) {
+                return `sqli-dojo-${y}-${m}-${d}`;
+            }
+            function todaySeed() {
+                const d = new Date();
+                return seedForYMD(d.getFullYear(), d.getMonth() + 1, d.getDate());
+            }
+            function ymdInputValue(d) {
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            }
+            const WEEKDAY_JP = ['日', '月', '火', '水', '木', '金', '土'];
+            function formatDateJP(d, isToday) {
+                return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${WEEKDAY_JP[d.getDay()]})${isToday ? ' — 本日' : ''}`;
+            }
+
+            /* ---------- Firebase(共通アカウント・進捗保存) ---------- */
+            // 既存の「一問一答システム」と同じFirebaseプロジェクトを利用しつつ、
+            // Firestoreのコレクション名とAuthのダミーメールドメインを分けることで、
+            // 同じユーザーIDでも別アカウントとして扱われ、データが混ざらないようにしている。
+            const firebaseConfig = {
+                apiKey: "AIzaSyCt1XIlg61RTPOWhOq_BU6rl4md7RZwvqk",
+                authDomain: "quiz-system-pro-app.firebaseapp.com",
+                projectId: "quiz-system-pro-app",
+                storageBucket: "quiz-system-pro-app.appspot.com",
+                messagingSenderId: "699736973166",
+                appId: "1:699736973166:web:55c90c30017cc981e9ab7f",
+            };
+            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+            const db = firebase.firestore();
+            const auth = firebase.auth();
+            const USERS_COLLECTION = 'sqliDojoUsers'; // 既存アプリの users コレクションとは別にする
+            const EMAIL_DOMAIN = 'sqli-dojo.local'; // 既存アプリのダミードメインとも別にする
+
+            function usernameToEmail(u) { return u.toLowerCase() + '@' + EMAIL_DOMAIN; }
+            const USERNAME_RULE = /^[A-Za-z0-9_-]{3,20}$/;
+            const PASSWORD_RULE = /^(?=.*[0-9])(?=.*[A-Za-z])[A-Za-z0-9]{8,}$/;
+            const PW_HAS_NUM = /[0-9]/, PW_HAS_ALPHA = /[A-Za-z]/, PW_CHARSET = /^[A-Za-z0-9]*$/;
+
+            let currentUser = null; // { uid, username, streak, lastCompletedDate, completedDates:Set }
+
+            async function loadUserDoc(uid, username) {
+                const doc = await db.collection(USERS_COLLECTION).doc(uid).get();
+                const data = doc.exists ? doc.data() : {};
+                currentUser = {
+                    uid, username,
+                    streak: data.streak || 0,
+                    lastCompletedDate: data.lastCompletedDate || null,
+                    completedDates: new Set(Object.keys(data.completedDates || {})),
+                };
+            }
+            async function saveUserDoc() {
+                if (!currentUser) return;
+                const completedDatesObj = {};
+                currentUser.completedDates.forEach(k => completedDatesObj[k] = true);
+                await db.collection(USERS_COLLECTION).doc(currentUser.uid).set({
+                    username: currentUser.username,
+                    streak: currentUser.streak,
+                    lastCompletedDate: currentUser.lastCompletedDate,
+                    completedDates: completedDatesObj,
+                }, { merge: true });
+            }
+
+            function dateKeyOf(y, m, d) { return `${y}-${m}-${d}`; }
+            function yesterdayKeyOf(y, m, d) {
+                const dt = new Date(y, m - 1, d);
+                dt.setDate(dt.getDate() - 1);
+                return dateKeyOf(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+            }
+
+            // 日付プレイ(state.dateKey)の10問すべてをクリアし、かつそれが「今日」で
+            // あった場合にのみ、連続記録(ストリーク)を更新する。
+            async function markDailyCompleteIfNeeded() {
+                if (!currentUser || state.mode !== 'daily') return;
+                const today = new Date();
+                const todayKey = dateKeyOf(today.getFullYear(), today.getMonth() + 1, today.getDate());
+                if (state.dateKey !== todayKey) return; // 過去の日付を後から解いた場合はストリーク対象外
+                if (currentUser.completedDates.has(todayKey)) return; // 既に記録済み
+
+                currentUser.completedDates.add(todayKey);
+                const yKey = yesterdayKeyOf(today.getFullYear(), today.getMonth() + 1, today.getDate());
+                if (currentUser.lastCompletedDate === yKey) currentUser.streak += 1;
+                else currentUser.streak = 1;
+                currentUser.lastCompletedDate = todayKey;
+                renderUserBar();
+                try { await saveUserDoc(); } catch (e) { console.error('保存に失敗しました', e); }
+            }
+
+            function renderUserBar() {
+                const wrap = document.getElementById('userBarWrap');
+                if (!currentUser) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+                wrap.style.display = '';
+                wrap.innerHTML = `
+    <div class="user-bar">
+      <span>👤 ${esc(currentUser.username)}</span>
+      <span class="streak-badge">🔥 連続 ${currentUser.streak} 日</span>
+      <button id="logoutBtn">ログアウト</button>
+    </div>`;
+                document.getElementById('logoutBtn').onclick = handleLogout;
+            }
+
+            function showScreen(id) {
+                ['loginScreen', 'registerScreen', 'landing', 'appLayout'].forEach(s => {
+                    document.getElementById(s).style.display = (s === id) ? '' : 'none';
+                });
+                document.getElementById('appHeaderControls').style.display = (id === 'appLayout') ? '' : 'none';
+            }
+
+            /* ---- パスワードルールの動的表示 ---- */
+            function wirePasswordRuleUI() {
+                const pwInput = document.getElementById('registerPassword');
+                pwInput.addEventListener('input', () => {
+                    const pw = pwInput.value;
+                    const set = (id, ok) => { document.getElementById(id).classList.toggle('valid', ok); };
+                    set('ruleLength', pw.length >= 8);
+                    set('ruleNumber', PW_HAS_NUM.test(pw));
+                    set('ruleAlpha', PW_HAS_ALPHA.test(pw));
+                    set('ruleCharset', pw.length > 0 && PW_CHARSET.test(pw));
+                });
+            }
+            document.querySelectorAll('.pw-toggle').forEach(btn => {
+                btn.onclick = () => {
+                    const input = document.getElementById(btn.dataset.target);
+                    if (input.type === 'password') { input.type = 'text'; btn.textContent = '隠す'; }
+                    else { input.type = 'password'; btn.textContent = '表示'; }
+                };
+            });
+            wirePasswordRuleUI();
+
+            document.getElementById('toRegisterBtn').onclick = () => showScreen('registerScreen');
+            document.getElementById('toLoginBtn').onclick = () => showScreen('loginScreen');
+
+            document.getElementById('guestBtn').onclick = () => {
+                currentUser = null;
+                renderUserBar();
+                renderLanding();
+            };
+
+            document.getElementById('loginBtn').onclick = async () => {
+                const uid = document.getElementById('loginUserId').value.trim();
+                const pw = document.getElementById('loginPassword').value;
+                const errEl = document.getElementById('loginError');
+                errEl.textContent = '';
+                if (!uid || !pw) { errEl.textContent = 'ユーザーIDとパスワードを入力してください。'; return; }
+                const btn = document.getElementById('loginBtn');
+                btn.disabled = true; btn.textContent = 'ログイン中...';
+                try {
+                    const cred = await auth.signInWithEmailAndPassword(usernameToEmail(uid), pw);
+                    await loadUserDoc(cred.user.uid, uid);
+                    renderUserBar();
+                    renderLanding();
+                } catch (e) {
+                    console.error(e);
+                    errEl.textContent = 'ユーザーIDまたはパスワードが正しくありません。';
+                } finally {
+                    btn.disabled = false; btn.textContent = 'ログイン';
+                }
+            };
+
+            document.getElementById('registerBtn').onclick = async () => {
+                const uid = document.getElementById('registerUserId').value.trim();
+                const pw = document.getElementById('registerPassword').value;
+                const errEl = document.getElementById('registerError');
+                errEl.textContent = '';
+                if (!USERNAME_RULE.test(uid)) { errEl.textContent = 'ユーザーIDは半角英数字と_-のみ、3〜20文字にしてください。'; return; }
+                if (!PASSWORD_RULE.test(pw)) { errEl.textContent = 'パスワードの条件を満たしていません。'; return; }
+                const btn = document.getElementById('registerBtn');
+                btn.disabled = true; btn.textContent = '登録中...';
+                try {
+                    const cred = await auth.createUserWithEmailAndPassword(usernameToEmail(uid), pw);
+                    await db.collection(USERS_COLLECTION).doc(cred.user.uid).set({ username: uid, streak: 0, lastCompletedDate: null, completedDates: {} });
+                    await auth.signOut();
+                    showScreen('loginScreen');
+                    document.getElementById('loginError').textContent = '';
+                    document.getElementById('loginUserId').value = uid;
+                    alert('登録が完了しました。ログインしてください。');
+                } catch (e) {
+                    console.error(e);
+                    if (e.code === 'auth/email-already-in-use') errEl.textContent = 'そのユーザーIDは既に使用されています。';
+                    else errEl.textContent = '登録に失敗しました。通信環境をご確認ください。';
+                } finally {
+                    btn.disabled = false; btn.textContent = '登録する';
+                }
+            };
+
+            function handleLogout() {
+                auth.signOut();
+                currentUser = null;
+                renderUserBar();
+                showScreen('loginScreen');
+            }
+
+            /* ---------- 状態管理 ---------- */
+            let LEVELS = buildBatch(todaySeed());
+            const state = { current: 1, cleared: new Set(), mode: 'daily', dateKey: null };
+
+            function renderLevelList() {
+                const ol = document.getElementById('levelList');
+                ol.innerHTML = '';
+                LEVELS.forEach(lv => {
+                    const li = document.createElement('li');
+                    const btn = document.createElement('button');
+                    btn.className = 'lvl-btn' + (lv.id === state.current ? ' active' : '') + (state.cleared.has(lv.id) ? ' cleared' : '');
+                    btn.innerHTML = `<span class="level-num">${String(lv.id).padStart(2, '0')}</span><span class="lvl-title">${lv.title}</span><span class="tag ${lv.tag}">${tagLabel(lv.tag)}</span>`;
+                    btn.onclick = () => { state.current = lv.id; render(); };
+                    li.appendChild(btn);
+                    ol.appendChild(li);
+                });
+                document.getElementById('clearedCount').textContent = state.cleared.size;
+            }
+            function tagLabel(t) { return t === 'beginner' ? '初級' : t === 'intermediate' ? '中級' : '上級'; }
+
+            function render() {
+                renderLevelList();
+                const lv = LEVELS.find(l => l.id === state.current);
+                const panel = document.getElementById('panel');
+
+                const fieldsHtml = lv.fields.map(f => `
+    <div>
+      <label for="f_${f.key}">${f.label}</label>
+      <input type="text" id="f_${f.key}" autocomplete="off" spellcheck="false">
+    </div>`).join('');
+
+                const initialVals = {};
+                lv.fields.forEach(f => initialVals[f.key] = '');
+                const initialQuery = lv.queryTpl(...lv.fields.map(f => initialVals[f.key] || '???'));
+
+                const shuffleBtnHtml = state.mode === 'free'
+                    ? `<button class="shuffle-one" id="shuffleOneBtn">🔀 別パターンに入れ替える</button>`
+                    : '';
+
+                panel.innerHTML = `
+    <div class="panel-head">
+      <h2>Lv.${lv.id} ${lv.title}</h2>
+      <span class="tag ${lv.tag}">${tagLabel(lv.tag)}</span>
+    </div>
+    <div class="scenario">${lv.story.map(p => `<p>${p}</p>`).join('')}</div>
+    <div class="query-box" id="queryBox">${esc(initialQuery)}</div>
+    <fieldset>${fieldsHtml}</fieldset>
+    <div class="actions">
+      <button class="run" id="runBtn">実行</button>
+      <button class="ghost" id="hintBtn">ヒントを見る</button>
+      ${shuffleBtnHtml}
+    </div>
+    <div id="hintArea"></div>
+    <div id="resultArea"></div>
+  `;
+
+                if (state.mode === 'free') {
+                    document.getElementById('shuffleOneBtn').onclick = () => {
+                        const idx = LEVELS.findIndex(l => l.id === state.current);
+                        const familyIdx = (LEVELS[idx].id - 1) % FAMILIES.length;
+                        const fresh = FAMILIES[familyIdx](seededRng('shuffle-' + Date.now() + '-' + Math.random()));
+                        fresh.id = LEVELS[idx].id;
+                        LEVELS[idx] = fresh;
+                        state.cleared.delete(fresh.id);
+                        render();
+                    };
+                }
+
+                lv.fields.forEach(f => {
+                    document.getElementById('f_' + f.key).addEventListener('input', updateQueryPreview);
+                });
+                function updateQueryPreview() {
+                    const vals = lv.fields.map(f => document.getElementById('f_' + f.key).value || '???');
+                    document.getElementById('queryBox').textContent = lv.queryTpl(...vals);
+                }
+
+                document.getElementById('hintBtn').onclick = () => {
+                    document.getElementById('hintArea').innerHTML = `<div class="hint-box">💡 ${lv.hint}</div>`;
+                };
+
+                document.getElementById('runBtn').onclick = () => {
+                    const vals = {};
+                    lv.fields.forEach(f => vals[f.key] = document.getElementById('f_' + f.key).value);
+                    const resultArea = document.getElementById('resultArea');
+                    resultArea.innerHTML = `<div class="result">実行中...</div>`;
+                    const finish = () => {
+                        const res = lv.check(vals);
+                        let html = `<div class="result ${res.ok ? 'ok' : 'fail'}">${esc(res.msg)}`;
+                        if (res.flag) html += `<div class="flag">${esc(res.flag)}</div>`;
+                        if (res.extraHtml) html += res.extraHtml;
+                        html += `</div>`;
+                        if (res.ok) {
+                            state.cleared.add(lv.id);
+                            html += `<div class="explain-box"><h4>種明かし</h4>${lv.explain}</div>`;
+                            renderLevelList();
+                            if (state.cleared.size >= LEVELS.length) {
+                                if (state.mode === 'daily') {
+                                    markDailyCompleteIfNeeded();
+                                } else if (state.mode === 'free') {
+                                    html += `<div class="freeplay-more"><p>この${LEVELS.length}問をすべてクリアしました!まだ続けますか?</p><button class="run" id="moreBtn">➕ さらに10問追加する</button></div>`;
+                                }
+                            }
+                        }
+                        resultArea.innerHTML = html;
+                        if (state.mode === 'free' && state.cleared.size >= LEVELS.length) {
+                            const moreBtn = document.getElementById('moreBtn');
+                            if (moreBtn) moreBtn.onclick = loadMoreFreePractice;
+                        }
+                    };
+                    if (vals.payload !== undefined || lv.fields.some(f => f.key === 'payload')) {
+                        const delay = (lv.check(vals).delayMs) || 0;
+                        setTimeout(finish, Math.min(delay, 5000));
+                    } else {
+                        finish();
+                    }
+                };
+
+                updateQueryPreview();
+            }
+
+            function loadMoreFreePractice() {
+                const startId = LEVELS.length + 1;
+                const extra = buildBatch('shuffle-' + Date.now() + '-' + Math.random());
+                extra.forEach((lv, i) => { lv.id = startId + i; LEVELS.push(lv); });
+                state.current = startId;
+                render();
+            }
+
+            const RELEASE_DATE = new Date(2026, 8, 22); // 本日リリース。日付リストはこの日から今日までを表示する。
+
+            function renderLanding() {
+                showScreen('landing');
+
+                const today = new Date();
+                const diffDays = Math.max(0, Math.round((stripTime(today) - stripTime(RELEASE_DATE)) / 86400000));
+                const list = document.getElementById('dateList');
+                list.innerHTML = '';
+
+                const freeLi = document.createElement('li');
+                const freeBtn = document.createElement('button');
+                freeBtn.className = 'date-item freeplay';
+                freeBtn.innerHTML = `<span>🎲 自由練習(無制限)<br><span class="sub">デイリーで飽き足りない人向け。10問終わるとさらに10問追加できます。</span></span><span class="arrow">›</span>`;
+                freeBtn.onclick = () => enterApp('shuffle-' + Date.now() + '-' + Math.random(), '自由練習', 'free', null);
+                freeLi.appendChild(freeBtn);
+                list.appendChild(freeLi);
+
+                for (let i = 0; i <= diffDays; i++) {
+                    const d = new Date(today);
+                    d.setDate(today.getDate() - i);
+                    const key = dateKeyOf(d.getFullYear(), d.getMonth() + 1, d.getDate());
+                    const isToday = i === 0;
+                    const done = currentUser && currentUser.completedDates.has(key);
+                    const li = document.createElement('li');
+                    const btn = document.createElement('button');
+                    btn.className = 'date-item' + (isToday ? ' today' : '');
+                    const statusHtml = currentUser
+                        ? (done ? '<span class="done-mark">✓ 実施済み</span>' : '<span class="undone-mark">未実施</span>')
+                        : '';
+                    btn.innerHTML = `<span>${formatDateJP(d, isToday)}<br><span class="sub">${isToday ? '本日配信の10問' : 'この日の10問'}</span></span>${statusHtml}<span class="arrow">›</span>`;
+                    btn.onclick = () => enterApp(seedForYMD(d.getFullYear(), d.getMonth() + 1, d.getDate()), formatDateJP(d, isToday), 'daily', key);
+                    li.appendChild(btn);
+                    list.appendChild(li);
+                }
+            }
+            function stripTime(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+
+            function enterApp(seed, label, mode, dateKey) {
+                LEVELS = buildBatch(seed);
+                state.cleared.clear();
+                state.current = 1;
+                state.mode = mode;
+                state.dateKey = dateKey;
+                showScreen('appLayout');
+                render();
+            }
+
+            document.getElementById('backBtn').onclick = renderLanding;
+
+            // 初期状態: 未ログインならログイン画面、Firebase Authが既存セッションを
+            // 検知した場合はそのままランディング(日付一覧)へ。
+            auth.onAuthStateChanged(async (user) => {
+                if (user && !currentUser) {
+                    try {
+                        const username = user.email.split('@')[0];
+                        await loadUserDoc(user.uid, username);
+                        renderUserBar();
+                        renderLanding();
+                    } catch (e) {
+                        console.error(e);
+                        showScreen('loginScreen');
+                    }
+                } else if (!user && !currentUser) {
+                    showScreen('loginScreen');
+                }
+            });
+        })();
+    </script>
+</body>
+
+</html>
