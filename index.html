@@ -1,117 +1,108 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>SQLインジェクション道場</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap"
-        rel="stylesheet">
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SQLインジェクション道場</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+<link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-    <header>
-        <h1>SQL<span>インジェクション</span>道場</h1>
-        <div class="header-right" id="appHeaderControls" style="display:none;">
-            <button class="back-btn" id="backBtn">← 日付一覧に戻る</button>
-            <div class="progress"><b id="clearedCount">0</b> / 10 突破</div>
-        </div>
-        <div class="header-right" id="userBarWrap" style="display:none;"></div>
-        <div class="header-right" id="adminBtnWrap" style="display:none;"></div>
-    </header>
+<header>
+  <h1>SQL<span>インジェクション</span>道場</h1>
+  <div class="header-right" id="appHeaderControls" style="display:none;">
+    <button class="back-btn" id="backBtn">← 日付一覧に戻る</button>
+    <div class="progress"><b id="clearedCount">0</b> / 10 突破</div>
+  </div>
+  <div class="header-right" id="userBarWrap" style="display:none;"></div>
+  <div class="header-right" id="adminBtnWrap" style="display:none;"></div>
+</header>
 
-    <!-- ログイン画面 -->
-    <div class="auth-screen" id="loginScreen">
-        <h2>ログイン</h2>
-        <p class="auth-sub">ユーザーIDとパスワードでログインしてください。デイリー問題の実施記録・連続記録を保存できます。</p>
-        <div class="auth-form">
-            <input type="text" id="loginUserId" placeholder="ユーザーID" autocomplete="off">
-            <div class="pw-wrap">
-                <input type="password" id="loginPassword" placeholder="パスワード" autocomplete="off">
-                <button type="button" class="pw-toggle" data-target="loginPassword">表示</button>
-            </div>
-        </div>
-        <div class="auth-error" id="loginError"></div>
-        <div class="auth-actions">
-            <button class="run" id="loginBtn">ログイン</button>
-            <button class="ghost" id="guestBtn">ゲストとして始める(記録は保存されません)</button>
-        </div>
-        <div class="auth-link-row"><button id="toRegisterBtn">新規登録はこちら</button></div>
+<!-- ログイン画面 -->
+<div class="auth-screen" id="loginScreen">
+  <h2>ログイン</h2>
+  <p class="auth-sub">ユーザーIDとパスワードでログインしてください。デイリー問題の実施記録・連続記録を保存できます。</p>
+  <div class="auth-form">
+    <input type="text" id="loginUserId" placeholder="ユーザーID" autocomplete="off">
+    <div class="pw-wrap">
+      <input type="password" id="loginPassword" placeholder="パスワード" autocomplete="off">
+      <button type="button" class="pw-toggle" data-target="loginPassword">表示</button>
     </div>
+  </div>
+  <div class="auth-error" id="loginError"></div>
+  <div class="auth-actions">
+    <button class="run" id="loginBtn">ログイン</button>
+    <button class="ghost" id="guestBtn">ゲストとして始める(記録は保存されません)</button>
+  </div>
+  <div class="auth-link-row"><button id="toRegisterBtn">新規登録はこちら</button></div>
+</div>
 
-    <!-- 新規登録画面 -->
-    <div class="auth-screen" id="registerScreen" style="display:none;">
-        <h2>新規アカウント登録</h2>
-        <p class="auth-sub">ユーザーIDとパスワードを設定してください。メールアドレスは不要です。</p>
-        <div class="auth-form">
-            <input type="text" id="registerUserId" placeholder="ユーザーID(半角英数字と_-、3〜20文字)" autocomplete="off">
-            <div class="pw-wrap">
-                <input type="password" id="registerPassword" placeholder="パスワード" autocomplete="off">
-                <button type="button" class="pw-toggle" data-target="registerPassword">表示</button>
-            </div>
-            <div class="pw-rules" id="pwRules">
-                <div class="pw-rule" id="ruleLength"><span class="dot"></span>8文字以上</div>
-                <div class="pw-rule" id="ruleNumber"><span class="dot"></span>半角数字を含む</div>
-                <div class="pw-rule" id="ruleAlpha"><span class="dot"></span>半角ローマ字を含む</div>
-                <div class="pw-rule" id="ruleCharset"><span class="dot"></span>使えるのは半角英数字のみ</div>
-            </div>
-        </div>
-        <div class="auth-error" id="registerError"></div>
-        <div class="auth-actions">
-            <button class="run" id="registerBtn">登録する</button>
-            <button class="ghost" id="toLoginBtn">ログイン画面に戻る</button>
-        </div>
+<!-- 新規登録画面 -->
+<div class="auth-screen" id="registerScreen" style="display:none;">
+  <h2>新規アカウント登録</h2>
+  <p class="auth-sub">ユーザーIDとパスワードを設定してください。メールアドレスは不要です。</p>
+  <div class="auth-form">
+    <input type="text" id="registerUserId" placeholder="ユーザーID(半角英数字と_-、3〜20文字)" autocomplete="off">
+    <div class="pw-wrap">
+      <input type="password" id="registerPassword" placeholder="パスワード" autocomplete="off">
+      <button type="button" class="pw-toggle" data-target="registerPassword">表示</button>
     </div>
-
-    <div class="landing" id="landing" style="display:none;">
-        <div class="landing-intro">
-            <p>毎日、日付をシード(種)にして自動生成される10問のSQLインジェクション演習です。同じ日付なら誰の環境でも同じ問題になります。</p>
-            <p>過去に配信された日付を選ぶと、その日の10問を後からでも解けます。</p>
-        </div>
-        <ul class="date-list" id="dateList"></ul>
+    <div class="pw-rules" id="pwRules">
+      <div class="pw-rule" id="ruleLength"><span class="dot"></span>8文字以上</div>
+      <div class="pw-rule" id="ruleNumber"><span class="dot"></span>半角数字を含む</div>
+      <div class="pw-rule" id="ruleAlpha"><span class="dot"></span>半角ローマ字を含む</div>
+      <div class="pw-rule" id="ruleCharset"><span class="dot"></span>使えるのは半角英数字のみ</div>
     </div>
+  </div>
+  <div class="auth-error" id="registerError"></div>
+  <div class="auth-actions">
+    <button class="run" id="registerBtn">登録する</button>
+    <button class="ghost" id="toLoginBtn">ログイン画面に戻る</button>
+  </div>
+</div>
 
-    <div class="layout" id="appLayout" style="display:none;">
-        <nav class="levels">
-            <ol id="levelList"></ol>
-        </nav>
-        <main>
-            <div class="panel" id="panel"></div>
-        </main>
-    </div>
+<div class="landing" id="landing" style="display:none;">
+  <div class="landing-intro">
+    <p>毎日、日付をシード(種)にして自動生成される10問のSQLインジェクション演習です。同じ日付なら誰の環境でも同じ問題になります。</p>
+    <p>過去に配信された日付を選ぶと、その日の10問を後からでも解けます。</p>
+  </div>
+  <ul class="date-list" id="dateList"></ul>
+</div>
 
-    <!-- 管理者パネル -->
-    <div class="admin-screen" id="adminScreen" style="display:none;">
-        <h2>管理者パネル</h2>
-        <p class="admin-sub">登録されているユーザーの一覧です。パスワードはハッシュ化されているため表示できません。</p>
-        <div id="adminTableWrap"></div>
-    </div>
+<div class="layout" id="appLayout" style="display:none;">
+  <nav class="levels"><ol id="levelList"></ol></nav>
+  <main><div class="panel" id="panel"></div></main>
+</div>
 
-    <!-- ランキング -->
-    <div class="admin-screen" id="rankScreen" style="display:none;">
-        <h2>🏆 ランキング(累計クリア日数)</h2>
-        <p class="admin-sub">デイリー問題をその日のうちに10問クリアした日の合計数でランキングしています。</p>
-        <div id="rankTableWrap"></div>
-    </div>
+<!-- 管理者パネル -->
+<div class="admin-screen" id="adminScreen" style="display:none;">
+  <h2>管理者パネル</h2>
+  <p class="admin-sub">登録されているユーザーの一覧です。パスワードはハッシュ化されているため表示できません。</p>
+  <div id="adminTableWrap"></div>
+</div>
 
-    <!-- カスタムモーダル -->
-    <div class="modal-overlay" id="modalOverlay">
-        <div class="modal-box">
-            <div class="modal-title" id="modalTitle"></div>
-            <div class="modal-message" id="modalMessage"></div>
-            <div class="modal-btns" id="modalBtns"></div>
-        </div>
-    </div>
+<!-- ランキング -->
+<div class="admin-screen" id="rankScreen" style="display:none;">
+  <h2>🏆 ランキング(累計クリア日数)</h2>
+  <p class="admin-sub">デイリー問題をその日のうちに10問クリアした日の合計数でランキングしています。</p>
+  <div id="rankTableWrap"></div>
+</div>
 
-    <script src="script.js"></script>
+<!-- カスタムモーダル -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-message" id="modalMessage"></div>
+    <div class="modal-btns" id="modalBtns"></div>
+  </div>
+</div>
+
+<script src="script.js"></script>
 </body>
-
 </html>
