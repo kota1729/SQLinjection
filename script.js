@@ -673,6 +673,7 @@ const PW_HAS_NUM = /[0-9]/, PW_HAS_ALPHA = /[A-Za-z]/, PW_CHARSET = /^[A-Za-z0-9
 
 let currentUser = null; // { uid, username, streak, lastCompletedDate, completedDates:Set, isAdmin, createdAt }
 let isGuest = false;
+let isRegistering = false; // 登録処理中はonAuthStateChangedの自動反応を止め、画面のちらつきを防ぐ
 
 async function loadUserDoc(uid, username){
   const doc = await db.collection(USERS_COLLECTION).doc(uid).get();
@@ -962,6 +963,7 @@ document.getElementById('registerBtn').onclick = async ()=>{
   if (!PASSWORD_RULE.test(pw)){ errEl.textContent = 'パスワードの条件を満たしていません。'; return; }
   const btn = document.getElementById('registerBtn');
   btn.disabled = true; btn.textContent = '登録中...';
+  isRegistering = true;
   try {
     const cred = await auth.createUserWithEmailAndPassword(usernameToEmail(uid), pw);
     await db.collection(USERS_COLLECTION).doc(cred.user.uid).set({
@@ -972,13 +974,14 @@ document.getElementById('registerBtn').onclick = async ()=>{
     showScreen('loginScreen');
     document.getElementById('loginError').textContent = '';
     document.getElementById('loginUserId').value = uid;
-    alert('登録が完了しました。ログインしてください。');
+    showModal('登録完了', '登録が完了しました。ログインしてください。', [{ label:'OK', primary:true }]);
   } catch(e){
     console.error(e);
     if (e.code === 'auth/email-already-in-use') errEl.textContent = 'そのユーザーIDは既に使用されています。';
     else errEl.textContent = '登録に失敗しました。通信環境をご確認ください。';
   } finally {
     btn.disabled = false; btn.textContent = '登録する';
+    isRegistering = false;
   }
 };
 
@@ -1171,6 +1174,7 @@ document.getElementById('backBtn').onclick = renderLanding;
 // 初期状態: 未ログインならログイン画面、Firebase Authが既存セッションを
 // 検知した場合はそのままランディング(日付一覧)へ。
 auth.onAuthStateChanged(async (user)=>{
+  if (isRegistering) return; // 登録処理中の自動サインインイベントは無視する
   if (user && !currentUser){
     try {
       const username = user.email.split('@')[0];
