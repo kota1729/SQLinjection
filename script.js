@@ -1170,6 +1170,11 @@
     state.current = 1;
     state.mode = mode;
     state.dateKey = dateKey;
+    // すでに「実施済み」として記録されている日付を開いた場合は、
+    // 見た目上も全問クリア済みとして表示する(個々の問題の解答内容は保存していないため)。
+    if (mode === 'daily' && currentUser && dateKey && currentUser.completedDates.has(dateKey)) {
+      LEVELS.forEach(lv => state.cleared.add(lv.id));
+    }
     showScreen('appLayout');
     render();
   }
