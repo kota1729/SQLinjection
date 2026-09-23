@@ -819,11 +819,12 @@
       <tr>
         <td>${esc(r.username)}${r.uid === currentUser.uid ? '' : ` <button class="admin-del-btn" data-uid="${r.uid}">削除</button>`}</td>
         <td class="${r.done ? 'status-done' : 'status-undone'}">${r.done ? '✓ 実施済み' : '未実施'}</td>
+        <td>${esc(r.createdStr)}</td>
       </tr>`).join('');
       wrap.innerHTML = `
       <table class="admin-table">
-        <tr><th>ユーザーID</th><th>本日のデイリー</th></tr>
-        ${rowsHtml || '<tr><td colspan="2">ユーザーがいません</td></tr>'}
+        <tr><th>ユーザーID</th><th>本日のデイリー</th><th>作成日時</th></tr>
+        ${rowsHtml || '<tr><td colspan="3">ユーザーがいません</td></tr>'}
       </table>
       <div style="margin-top:16px;"><button class="ghost" id="adminBackBtn">← 戻る</button></div>
       <p class="admin-sub" style="margin-top:14px;">※「削除」はこのユーザーの記録データ(Firestore)を削除します。ログイン用のアカウント自体(Firebase Authentication)はブラウザからは削除できないため、別途Cloud Functions等での対応が必要です。</p>
