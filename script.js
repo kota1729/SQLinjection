@@ -662,6 +662,8 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(e=>console.error('persistence設定に失敗', e));
+// ↑ ログイン状態をブラウザに保存しない設定。これにより、ページを開くたびに必ずログイン画面が表示される。
 const USERS_COLLECTION = 'users';
 const LEADERBOARD_COLLECTION = 'leaderboard'; // username と累計日数だけを持つ(isAdminなどは含めない)
 const EMAIL_DOMAIN = 'sqli-dojo.local'; // userIDをFirebase Auth用のダミーメールに変換するためのドメイン
@@ -815,15 +817,13 @@ async function renderAdminPanel(){
     rows.sort((a,b)=> a.username.localeCompare(b.username));
     const rowsHtml = rows.map(r=>`
       <tr>
-        <td>${esc(r.username)}</td>
+        <td>${esc(r.username)}${r.uid===currentUser.uid ? '' : ` <button class="admin-del-btn" data-uid="${r.uid}">削除</button>`}</td>
         <td class="${r.done?'status-done':'status-undone'}">${r.done?'✓ 実施済み':'未実施'}</td>
-        <td>${esc(r.createdStr)}</td>
-        <td>${r.uid===currentUser.uid ? '' : `<button class="admin-del-btn" data-uid="${r.uid}">削除</button>`}</td>
       </tr>`).join('');
     wrap.innerHTML = `
       <table class="admin-table">
-        <tr><th>ユーザーID</th><th>本日のデイリー</th><th>作成日時</th><th></th></tr>
-        ${rowsHtml || '<tr><td colspan="4">ユーザーがいません</td></tr>'}
+        <tr><th>ユーザーID</th><th>本日のデイリー</th></tr>
+        ${rowsHtml || '<tr><td colspan="2">ユーザーがいません</td></tr>'}
       </table>
       <div style="margin-top:16px;"><button class="ghost" id="adminBackBtn">← 戻る</button></div>
       <p class="admin-sub" style="margin-top:14px;">※「削除」はこのユーザーの記録データ(Firestore)を削除します。ログイン用のアカウント自体(Firebase Authentication)はブラウザからは削除できないため、別途Cloud Functions等での対応が必要です。</p>
